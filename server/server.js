@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
+import taskRoutes from './routes/taskRoutes.js'
 
 dotenv.config();
 
@@ -14,13 +15,13 @@ app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
 app.use('/api/auth', authRoutes); 
+app.use('/api/tasks', taskRoutes); 
 
-// --- Database Connection ---
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
-// --- Basic Test Route ---
+
 app.get('/', (req, res) => {
   res.send('Kanban Backend is running!');
 });

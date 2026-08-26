@@ -1,64 +1,70 @@
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '../context/AuthContext.jsx';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import {
-  fetchTasks,
-  createTask,
-  updateTask,
-  deleteTask,
-  moveTask,
-  selectTasksByStage,
-  selectTasksLoading,
-  selectTaskError,
-  clearTaskError,
-} from '../redux/taskSlice';
+import { createTask, fetchTasks, updateTask, deleteTask, selectTasksByStage } from '../redux/taskSlice';
 import Navbar from './Navbar';
+import { TextField, MenuItem, IconButton } from '@mui/material';
+import ArrowBack from '@mui/icons-material/ArrowBack';
+import ArrowForward from '@mui/icons-material/ArrowForward';
+import Edit from '@mui/icons-material/Edit';
+import Delete from '@mui/icons-material/Delete';
+import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
+
+const textFieldSx = {
+  '& .MuiInputBase-input': { fontSize: '14px' },
+  '& .MuiInputLabel-root': { fontSize: '14px' },
+  '& .MuiOutlinedInput-root': {
+    borderRadius: '10px',
+    backgroundColor: '#fff',
+    '&.Mui-focused fieldset': { borderColor: '#070707' },
+  },
+  '& .MuiInputLabel-root.Mui-focused': { color: '#070707' },
+};
 
 const STAGES = [
-  { id: 0, name: 'Backlog', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
-  { id: 1, name: 'To Do', color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
-  { id: 2, name: 'Ongoing', color: '#a855f7', bg: '#faf5ff', border: '#e9d5ff' },
-  { id: 3, name: 'Done', color: '#22c55e', bg: '#f0fdf4', border: '#bbf7d0' },
+  { id: 0, title: 'Backlog', border: 'border-orange-200', background: 'bg-orange-100' },
+  { id: 1, title: 'To Do', border: 'border-blue-200', background: 'bg-blue-100' },
+  { id: 2, title: 'Ongoing', border: 'border-pink-200', background: 'bg-pink-100' },
+  { id: 3, title: 'Done', border: 'border-green-200', background: 'bg-green-100' }
 ];
 
-const PRIORITY_COLORS = {
-  high: { text: '#dc2626', bg: '#fef2f2' },
-  medium: { text: '#f59e0b', bg: '#fffbeb' },
-  low: { text: '#22c55e', bg: '#f0fdf4' },
+const getTomorrowDateString = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow.toISOString().split('T')[0];
 };
 
 export default function TaskManagement() {
-  const { token } = useAuth();
   const dispatch = useDispatch();
-  const loading = useSelector(selectTasksLoading);
-  const error = useSelector(selectTaskError);
+  const loading = useSelector((state) => state.tasks.loading);
+  const error = useSelector((state) => state.tasks.error);
 
-  // Form state
   const [title, setTitle] = useState('');
-  const [priority, setPriority] = useState('');
+  const [priority, setPriority] = useState(''); // Empty initially
   const [deadline, setDeadline] = useState('');
   const [formError, setFormError] = useState('');
+  const dateRef = useRef(null);
 
-  // Edit state
+  // Edit State
   const [editingTask, setEditingTask] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editPriority, setEditPriority] = useState('');
   const [editDeadline, setEditDeadline] = useState('');
 
-  // Delete confirmation
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  // Drag and Drop State
+  const [draggedTaskId, setDraggedTaskId] = useState(null);
+  const [showTrash, setShowTrash] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); 
 
   useEffect(() => {
-    if (token) dispatch(fetchTasks());
-  }, [token, dispatch]);
+    dispatch(fetchTasks());
+  }, [dispatch]);
 
-  // Handle create task
-  const handleCreateTask = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setFormError('');
 
     if (!title.trim() || !priority || !deadline) {
-      setFormError('Please fill in all fields: task name, priority, and deadline.');
+      setFormError('Please fill in all fields (Title, Priority, Deadline).');
       return;
     }
 
@@ -68,134 +74,137 @@ export default function TaskManagement() {
     setDeadline('');
   };
 
-  // Handle move task
-  const handleMove = (taskId, newStage) => {
-    dispatch(moveTask({ id: taskId, stage: newStage }));
+  const handleMove = (task, direction) => {
+    const newStage = task.stage + direction;
+    if (newStage >= 0 && newStage <= 3) {
+      dispatch(updateTask({ id: task._id, updates: { stage: newStage } }));
+    }
   };
 
-  // Handle edit
-  const startEditing = (task) => {
+  const handleDelete = (id) => {
+    dispatch(deleteTask(id));
+    setDeleteConfirm(null);
+  };
+
+  const handleStartEdit = (task) => {
     setEditingTask(task._id);
     setEditTitle(task.title);
     setEditPriority(task.priority);
-    setEditDeadline(task.deadline?.split('T')[0] || '');
+    setEditDeadline(task.deadline.split('T')[0]); 
   };
 
-  const handleSaveEdit = (taskId) => {
-    if (!editTitle.trim() || !editPriority || !editDeadline) return;
+  const handleSaveEdit = (id) => {
     dispatch(updateTask({
-      id: taskId,
-      updates: { title: editTitle.trim(), priority: editPriority, deadline: editDeadline },
+      id,
+      updates: { title: editTitle, priority: editPriority, deadline: editDeadline }
     }));
     setEditingTask(null);
   };
 
-  const cancelEditing = () => {
-    setEditingTask(null);
+  const handleDragStart = (e, taskId) => {
+    setDraggedTaskId(taskId);
+    e.dataTransfer.setData('taskId', taskId);
+    setShowTrash(true);
   };
 
-  // Handle delete
-  const handleDelete = (taskId) => {
-    dispatch(deleteTask(taskId));
-    setDeleteConfirm(null);
+  const handleDragOver = (e) => e.preventDefault();
+
+  const handleDropColumn = (e, stageId) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('taskId');
+    if (taskId) {
+      dispatch(updateTask({ id: taskId, updates: { stage: stageId } }));
+    }
+    setDraggedTaskId(null);
+    setShowTrash(false);
+  };
+
+  const handleDropTrash = (e) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('taskId');
+    if (taskId) {
+      setDeleteConfirm(taskId); 
+    }
+    setDraggedTaskId(null);
+    setShowTrash(false);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTaskId(null);
+    setShowTrash(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col relative">
       <Navbar />
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="p-8 max-w-7xl mx-auto w-full flex-1 flex flex-col">
+        <h1 className="text-3xl font-bold mb-6 text-gray-900">Task Management</h1>
+        
         {/* Create Task Form */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm mb-8">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Create New Task</h2>
-          <form onSubmit={handleCreateTask} className="flex flex-wrap items-end gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Task Name</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter task name..."
-                className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-indigo-500 transition-colors"
-              />
-            </div>
-            <div className="w-40">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-indigo-500 transition-colors bg-white"
-              >
-                <option value="">Select...</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
-            <div className="w-44">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Deadline</label>
-              <input
-                type="date"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-indigo-500 transition-colors"
-              />
-            </div>
-            <button
-              type="submit"
-              className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors cursor-pointer"
-            >
-              + Create Task
-            </button>
-          </form>
-          {formError && <p className="text-red-500 text-xs mt-2">{formError}</p>}
-          {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
-        </div>
+        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row items-center gap-4 mb-4 w-full">
+          <TextField
+            fullWidth label="Task Name" placeholder="E.g., Design homepage"
+            value={title} onChange={(e) => setTitle(e.target.value)}
+            sx={{ ...textFieldSx, flex: { md: 1 } }} InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            select label="Priority"
+            value={priority} onChange={(e) => setPriority(e.target.value)}
+            sx={{ ...textFieldSx, minWidth: '160px', width: { xs: '100%', md: 'auto' } }} InputLabelProps={{ shrink: true }}
+          >
+            <MenuItem value="high" sx={{ fontSize: '14px' }}>High</MenuItem>
+            <MenuItem value="medium" sx={{ fontSize: '14px' }}>Medium</MenuItem>
+            <MenuItem value="low" sx={{ fontSize: '14px' }}>Low</MenuItem>
+          </TextField>
+          <TextField
+            type="date" label="Deadline"
+            value={deadline} onChange={(e) => setDeadline(e.target.value)}
+            inputRef={dateRef} onClick={() => dateRef.current?.showPicker()}
+            inputProps={{ min: getTomorrowDateString() }}
+            sx={{ ...textFieldSx, minWidth: '160px', width: { xs: '100%', md: 'auto' }, cursor: 'pointer' }}
+            InputLabelProps={{ shrink: true }}
+          />
+          <button type="submit" disabled={loading} className="w-full md:w-auto px-8 h-[52px] rounded-xl text-white font-semibold text-sm cursor-pointer transition-all disabled:opacity-50 hover:shadow-lg whitespace-nowrap" style={{ background: '#070707' }}>
+            {loading ? 'Adding...' : '+ Create Task'}
+          </button>
+        </form>
+        {formError && <p className="text-red-500 text-sm mb-6">{formError}</p>}
 
         {/* Kanban Board */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {STAGES.map((stage) => (
-            <StageColumn
-              key={stage.id}
-              stage={stage}
-              editingTask={editingTask}
-              editTitle={editTitle}
-              editPriority={editPriority}
-              editDeadline={editDeadline}
-              setEditTitle={setEditTitle}
-              setEditPriority={setEditPriority}
-              setEditDeadline={setEditDeadline}
-              onMove={handleMove}
-              onStartEdit={startEditing}
-              onSaveEdit={handleSaveEdit}
-              onCancelEdit={cancelEditing}
-              deleteConfirm={deleteConfirm}
-              setDeleteConfirm={setDeleteConfirm}
-              onDelete={handleDelete}
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+          {STAGES.map(stage => (
+            <StageColumn 
+              key={stage.id} stage={stage}
+              editingTask={editingTask} editTitle={editTitle} editPriority={editPriority} editDeadline={editDeadline}
+              setEditTitle={setEditTitle} setEditPriority={setEditPriority} setEditDeadline={setEditDeadline}
+              onMove={handleMove} onStartEdit={handleStartEdit} onSaveEdit={handleSaveEdit} onCancelEdit={() => setEditingTask(null)}
+              onDelete={(id) => setDeleteConfirm(id)}
+              onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={(e) => handleDropColumn(e, stage.id)} onDragEnd={handleDragEnd}
             />
           ))}
         </div>
       </div>
 
-      {/* Delete confirmation modal */}
+      {/* Floating Trash Bin */}
+      {showTrash && (
+        <div 
+          onDragOver={handleDragOver} 
+          onDrop={handleDropTrash}
+          className="fixed bottom-10 right-10 w-20 h-20 bg-gray-50/80 backdrop-blur-sm border-2 border-dashed border-gray-300 rounded-full flex flex-col items-center justify-center text-gray-400 shadow-xl transition-all hover:scale-110 hover:border-red-400 hover:text-red-500 hover:bg-red-50 z-50"
+        >
+          <DeleteOutlined sx={{ fontSize: 32 }} />
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
       {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Task?</h3>
-            <p className="text-sm text-gray-500 mb-6">This action cannot be undone. Are you sure you want to delete this task?</p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 text-sm rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(deleteConfirm)}
-                className="px-4 py-2 text-sm rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 cursor-pointer"
-              >
-                Delete
-              </button>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Task?</h3>
+            <p className="text-sm text-gray-500 mb-6">Are you sure you want to permanently remove this task? This action cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setDeleteConfirm(null)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 cursor-pointer">Cancel</button>
+              <button onClick={() => handleDelete(deleteConfirm)} className="px-5 py-2.5 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 cursor-pointer shadow-md">Delete Task</button>
             </div>
           </div>
         </div>
@@ -204,143 +213,90 @@ export default function TaskManagement() {
   );
 }
 
-// ==========================================
-// STAGE COLUMN COMPONENT
-// ==========================================
-function StageColumn({
-  stage, editingTask, editTitle, editPriority, editDeadline,
+// Separate component for each column to keep things clean and use Redux selectors efficiently
+function StageColumn({ 
+  stage, editingTask, editTitle, editPriority, editDeadline, 
   setEditTitle, setEditPriority, setEditDeadline,
-  onMove, onStartEdit, onSaveEdit, onCancelEdit,
-  deleteConfirm, setDeleteConfirm, onDelete,
+  onMove, onStartEdit, onSaveEdit, onCancelEdit, onDelete,
+  onDragStart, onDragOver, onDrop, onDragEnd
 }) {
   const tasks = useSelector(selectTasksByStage(stage.id));
 
   return (
-    <div
-      className="rounded-2xl p-4 min-h-[400px]"
-      style={{ backgroundColor: stage.bg, border: `1px solid ${stage.border}` }}
+    <div 
+      onDragOver={onDragOver} 
+      onDrop={onDrop}
+      className={`bg-white rounded-md p-4 min-h-[500px] border-t-[3px] border-[1px] ${stage.border} ${stage.background} shadow-sm flex flex-col`}
     >
-      {/* Column Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: stage.color }}></div>
-          <span className="text-sm font-semibold text-gray-800">{stage.name}</span>
-        </div>
-        <span
-          className="text-xs font-bold px-2 py-0.5 rounded-full text-white"
-          style={{ backgroundColor: stage.color }}
-        >
-          {tasks.length}
-        </span>
+      <div className="flex items-center mb-5 mt-1">
+        <h2 className="font-bold text-gray-800 text-[15px]">{stage.title}</h2>
+        <span className="text-gray-400 text-[15px] ml-2">({tasks.length})</span>
       </div>
 
-      {/* Task Cards */}
-      <div className="space-y-3">
-        {tasks.map((task) => (
-          <div key={task._id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-50">
+      <div className="flex flex-col gap-3 flex-1">
+        {tasks.map(task => (
+          <div 
+            key={task._id} 
+            draggable 
+            onDragStart={(e) => onDragStart(e, task._id)}
+            onDragEnd={onDragEnd}
+            className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-grab active:cursor-grabbing active:rotate-2 active:shadow-lg active:scale-[1.02] hover:shadow-md transition-all"
+          >
             {editingTask === task._id ? (
-              /* Edit Mode */
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-500"
-                />
-                <select
-                  value={editPriority}
-                  onChange={(e) => setEditPriority(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-500 bg-white"
-                >
+              // EDIT MODE
+              <div className="flex flex-col gap-2">
+                <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="border p-1.5 rounded text-sm w-full outline-blue-500" />
+                <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)} className="border p-1.5 rounded text-sm w-full outline-blue-500">
                   <option value="high">High</option>
                   <option value="medium">Medium</option>
                   <option value="low">Low</option>
                 </select>
-                <input
-                  type="date"
-                  value={editDeadline}
-                  onChange={(e) => setEditDeadline(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-500"
-                />
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => onSaveEdit(task._id)}
-                    className="flex-1 text-xs py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 cursor-pointer"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={onCancelEdit}
-                    className="flex-1 text-xs py-1.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
+                <input type="date" min={getTomorrowDateString()} value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} className="border p-1.5 rounded text-sm w-full outline-blue-500" />
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => onSaveEdit(task._id)} className="flex-1 bg-green-500 text-white text-xs font-bold py-1.5 rounded hover:bg-green-600 cursor-pointer">Save</button>
+                  <button onClick={onCancelEdit} className="flex-1 bg-gray-200 text-gray-700 text-xs font-bold py-1.5 rounded hover:bg-gray-300 cursor-pointer">Cancel</button>
                 </div>
               </div>
             ) : (
-              /* View Mode */
               <>
-                <p className="text-sm font-medium text-gray-900 mb-2">{task.title}</p>
-                <div className="flex items-center justify-between mb-3">
-                  <span
-                    className="text-xs font-medium px-2 py-0.5 rounded-full capitalize"
-                    style={{
-                      color: PRIORITY_COLORS[task.priority]?.text,
-                      backgroundColor: PRIORITY_COLORS[task.priority]?.bg,
-                    }}
-                  >
-                    {task.priority}
+                <h3 className="font-bold text-gray-700 text-[14px] mb-3 leading-tight">{task.title}</h3>
+                
+                <div className="flex justify-between items-center mb-3">
+                  <span className="flex items-center gap-1.5 bg-gray-100 text-gray-400 text-[11px] font-semibold px-2 py-1 rounded">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    {new Date(task.deadline).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.')}
                   </span>
-                  <span className="text-xs text-gray-400">
-                    {task.deadline ? new Date(task.deadline).toLocaleDateString() : ''}
-                  </span>
+                  
+                  {/* Subtle priority dot based on the image's bottom right indicator */}
+                  <span className={`w-2 h-2 rounded-full 
+                    ${task.priority === 'high' ? 'bg-red-400' : task.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'}`}
+                    title={`Priority: ${task.priority}`}
+                  ></span>
                 </div>
-                {/* Action Buttons */}
-                <div className="flex items-center gap-1 border-t border-gray-100 pt-2">
-                  {/* Back */}
-                  <button
-                    onClick={() => onMove(task._id, task.stage - 1)}
-                    disabled={task.stage === 0}
-                    className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                    title="Move back"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
-                  </button>
-                  {/* Forward */}
-                  <button
-                    onClick={() => onMove(task._id, task.stage + 1)}
-                    disabled={task.stage === 3}
-                    className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                    title="Move forward"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-                  </button>
-                  <div className="flex-1"></div>
-                  {/* Edit */}
-                  <button
-                    onClick={() => onStartEdit(task)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-500 cursor-pointer"
-                    title="Edit"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  </button>
-                  {/* Delete */}
-                  <button
-                    onClick={() => setDeleteConfirm(task._id)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 cursor-pointer"
-                    title="Delete"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                  </button>
+                
+                {/* ACTION BUTTONS (Hidden subtly until hovered or just styled light) */}
+                <div className="flex items-center justify-between border-t border-gray-50 pt-2 mt-1 -mx-1">
+                  <div className="flex gap-0">
+                    <IconButton size="small" onClick={() => onMove(task, -1)} disabled={stage.id === 0} sx={{ color: '#d1d5db', '&:hover': { color: '#6b7280' } }}>
+                      <ArrowBack sx={{ fontSize: 14 }} />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => onMove(task, 1)} disabled={stage.id === 3} sx={{ color: '#d1d5db', '&:hover': { color: '#6b7280' } }}>
+                      <ArrowForward sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </div>
+                  <div className="flex gap-0">
+                    <IconButton size="small" onClick={() => onStartEdit(task)} sx={{ color: '#d1d5db', '&:hover': { color: '#3b82f6' } }}>
+                      <Edit sx={{ fontSize: 14 }} />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => onDelete(task._id)} sx={{ color: '#d1d5db', '&:hover': { color: '#ef4444' } }}>
+                      <Delete sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </div>
                 </div>
               </>
             )}
           </div>
         ))}
-
-        {tasks.length === 0 && (
-          <p className="text-xs text-gray-400 text-center py-8">No tasks here</p>
-        )}
       </div>
     </div>
   );

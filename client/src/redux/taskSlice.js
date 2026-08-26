@@ -1,150 +1,113 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api/tasks';
-
-// Helper to get auth headers
-const getAuthHeaders = () => ({
-  headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-});
-
-// ==========================================
-// ASYNC THUNKS (API calls)
-// ==========================================
-
-// Fetch all tasks
+// 1. Fetch existing tasks
 export const fetchTasks = createAsyncThunk('tasks/fetchTasks', async (_, { rejectWithValue }) => {
   try {
-    const response = await axios.get(API_URL, getAuthHeaders());
+    const token = localStorage.getItem('token');
+    const response = await axios.get('http://localhost:5000/api/tasks', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
     return response.data;
   } catch (error) {
-    return rejectWithValue(error.response?.data?.message || 'Failed to fetch tasks');
+    return rejectWithValue(error.response?.data?.message || 'Failed to fetch');
   }
 });
 
-// Create a new task
+// 2. Create a new task
 export const createTask = createAsyncThunk('tasks/createTask', async (taskData, { rejectWithValue }) => {
   try {
-    const response = await axios.post(API_URL, taskData, getAuthHeaders());
+    const token = localStorage.getItem('token');
+    const response = await axios.post('http://localhost:5000/api/tasks', taskData, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
     return response.data;
   } catch (error) {
-    return rejectWithValue(error.response?.data?.message || 'Failed to create task');
+    return rejectWithValue(error.response?.data?.message || 'Failed to create');
   }
 });
 
-// Update a task
+// 3. Update a task
 export const updateTask = createAsyncThunk('tasks/updateTask', async ({ id, updates }, { rejectWithValue }) => {
   try {
-    const response = await axios.put(`${API_URL}/${id}`, updates, getAuthHeaders());
+    const token = localStorage.getItem('token');
+    const response = await axios.put(`http://localhost:5000/api/tasks/${id}`, updates, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
     return response.data;
   } catch (error) {
-    return rejectWithValue(error.response?.data?.message || 'Failed to update task');
+    return rejectWithValue(error.response?.data?.message || 'Failed to update');
   }
 });
 
-// Delete a task
+// 4. Delete a task
 export const deleteTask = createAsyncThunk('tasks/deleteTask', async (id, { rejectWithValue }) => {
   try {
-    await axios.delete(`${API_URL}/${id}`, getAuthHeaders());
-    return id; // Return the id so we can remove it from the state
+    const token = localStorage.getItem('token');
+    await axios.delete(`http://localhost:5000/api/tasks/${id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return id; // Return the ID so we can remove it from the state
   } catch (error) {
-    return rejectWithValue(error.response?.data?.message || 'Failed to delete task');
+    return rejectWithValue(error.response?.data?.message || 'Failed to delete');
   }
 });
 
-// Move a task to a different stage
-export const moveTask = createAsyncThunk('tasks/moveTask', async ({ id, stage }, { rejectWithValue }) => {
-  try {
-    const response = await axios.patch(`${API_URL}/${id}/move`, { stage }, getAuthHeaders());
-    return response.data;
-  } catch (error) {
-    return rejectWithValue(error.response?.data?.message || 'Failed to move task');
-  }
-});
-
-// ==========================================
-// SLICE
-// ==========================================
-
+// 3. The Redux Slice
 const taskSlice = createSlice({
   name: 'tasks',
-  initialState: {
-    items: [],       // Array of all tasks
-    loading: false,
-    error: null,
-  },
-  reducers: {
-    clearTaskError: (state) => {
-      state.error = null;
-    },
-  },
+  initialState: { items: [], loading: false, error: null },
+  reducers: {},
   extraReducers: (builder) => {
     builder
-      // --- Fetch Tasks ---
-      .addCase(fetchTasks.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
+      // Handle Fetching
       .addCase(fetchTasks.fulfilled, (state, action) => {
-        state.loading = false;
-        state.items = action.payload;
+        state.items = action.payload; // Put the database tasks into Redux
       })
-      .addCase(fetchTasks.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
+      // Handle Creating
+      .addCase(createTask.pending, (state) => {
+        state.loading = true;
       })
-
-      // --- Create Task ---
       .addCase(createTask.fulfilled, (state, action) => {
-        state.items.unshift(action.payload); // Add to the beginning
+        state.loading = false;
+        state.items.unshift(action.payload); // Add the new task to the top of the array
       })
       .addCase(createTask.rejected, (state, action) => {
+        state.loading = false;
         state.error = action.payload;
       })
-
-      // --- Update Task ---
+      // Handle Updating
       .addCase(updateTask.fulfilled, (state, action) => {
         const index = state.items.findIndex((t) => t._id === action.payload._id);
-        if (index !== -1) state.items[index] = action.payload;
+        if (index !== -1) {
+          state.items[index] = action.payload; // Replace old task with updated task
+        }
       })
-
-      // --- Delete Task ---
+      // Handle Deleting
       .addCase(deleteTask.fulfilled, (state, action) => {
-        state.items = state.items.filter((t) => t._id !== action.payload);
-      })
-
-      // --- Move Task ---
-      .addCase(moveTask.fulfilled, (state, action) => {
-        const index = state.items.findIndex((t) => t._id === action.payload._id);
-        if (index !== -1) state.items[index] = action.payload;
+        state.items = state.items.filter((t) => t._id !== action.payload); // Remove by ID
       });
   },
 });
 
-export const { clearTaskError } = taskSlice.actions;
+export default taskSlice.reducer;
 
 // ==========================================
-// SELECTORS (Derive stats from the tasks array)
+// SELECTORS (How we read data from the store)
 // ==========================================
-
-export const selectAllTasks = (state) => state.tasks.items;
+export const selectTasks = (state) => state.tasks.items;
 export const selectTasksLoading = (state) => state.tasks.loading;
-export const selectTaskError = (state) => state.tasks.error;
 
-// Derived stats — no separate API call needed!
+// This automatically calculates our stats for the Dashboard!
 export const selectTaskStats = (state) => {
   const tasks = state.tasks.items;
-  const total = tasks.length;
-  const backlog = tasks.filter((t) => t.stage === 0).length;
-  const todo = tasks.filter((t) => t.stage === 1).length;
-  const ongoing = tasks.filter((t) => t.stage === 2).length;
-  const completed = tasks.filter((t) => t.stage === 3).length;
-
-  return { total, backlog, todo, ongoing, completed, pending: total - completed };
+  return {
+    total: tasks.length,
+    completed: tasks.filter(task => task.stage === 3).length, // Stage 3 is 'Done'
+    pending: tasks.filter(task => task.stage !== 3).length  // Anything else is pending
+  };
 };
 
-// Select tasks by stage
-export const selectTasksByStage = (stage) => (state) =>
-  state.tasks.items.filter((t) => t.stage === stage);
-
-export default taskSlice.reducer;
+export const selectTasksByStage = (stageId) => (state) => {
+  return state.tasks.items.filter((task) => task.stage === stageId);
+};
