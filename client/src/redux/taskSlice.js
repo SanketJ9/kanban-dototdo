@@ -5,7 +5,7 @@ import axios from 'axios';
 export const fetchTasks = createAsyncThunk('tasks/fetchTasks', async (_, { rejectWithValue }) => {
   try {
     const token = localStorage.getItem('token');
-    const response = await axios.get('http://localhost:5000/api/tasks', {
+    const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/tasks`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data;
@@ -18,7 +18,7 @@ export const fetchTasks = createAsyncThunk('tasks/fetchTasks', async (_, { rejec
 export const createTask = createAsyncThunk('tasks/createTask', async (taskData, { rejectWithValue }) => {
   try {
     const token = localStorage.getItem('token');
-    const response = await axios.post('http://localhost:5000/api/tasks', taskData, {
+    const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/tasks`, taskData, {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data;
@@ -31,7 +31,7 @@ export const createTask = createAsyncThunk('tasks/createTask', async (taskData, 
 export const updateTask = createAsyncThunk('tasks/updateTask', async ({ id, updates }, { rejectWithValue }) => {
   try {
     const token = localStorage.getItem('token');
-    const response = await axios.put(`http://localhost:5000/api/tasks/${id}`, updates, {
+    const response = await axios.put(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/tasks/${id}`, updates, {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data;
@@ -44,7 +44,7 @@ export const updateTask = createAsyncThunk('tasks/updateTask', async ({ id, upda
 export const deleteTask = createAsyncThunk('tasks/deleteTask', async (id, { rejectWithValue }) => {
   try {
     const token = localStorage.getItem('token');
-    await axios.delete(`http://localhost:5000/api/tasks/${id}`, {
+    await axios.delete(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/tasks/${id}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     return id; // Return the ID so we can remove it from the state

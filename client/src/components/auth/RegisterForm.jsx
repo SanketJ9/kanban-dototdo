@@ -68,7 +68,7 @@ export default function RegisterForm() {
       if (profileImage) formData.append('profileImage', profileImage);
 
       // Example API call integration placeholder:
-      const response = await axios.post('http://localhost:5000/api/auth/register', formData, {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/register`, formData, {
         header: {
           'Content-Type': 'multipart/form-data',
         }

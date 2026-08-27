@@ -40,7 +40,7 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           {user.profileImage ? (
             <img
-              src={`http://localhost:5000${user.profileImage}`}
+              src={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${user.profileImage}`}
               alt="Profile"
               className="w-9 h-9 rounded-full object-cover border-2 border-gray-200"
             />
